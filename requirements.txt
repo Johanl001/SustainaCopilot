@@ -7,4 +7,6 @@ pydantic
 python-dotenv
 pypdf
 sentence-transformers
+docx2txt
+cryptography
 chromadb
