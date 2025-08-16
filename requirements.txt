@@ -10,3 +10,4 @@ sentence-transformers
 docx2txt
 cryptography
 chromadb
+python-multipart
