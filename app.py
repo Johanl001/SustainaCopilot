@@ -86,7 +86,8 @@ async def analyze_report_endpoint(file: UploadFile = File(...)):
             ("user", "{input}"),
         ])
         summary_chain = create_stuff_documents_chain(llm, summary_prompt)
-        raw_response = summary_chain.invoke({"input_documents": documents[:20], "input": original_filename})
+        context_text = "\n\n".join([d.page_content for d in documents[:20]])
+        raw_response = summary_chain.invoke({"input": original_filename, "context": context_text})
 
         if isinstance(raw_response, str):
             response_text = raw_response
@@ -119,7 +120,8 @@ async def analyze_report_endpoint(file: UploadFile = File(...)):
 async def get_report_summary(query: QueryModel):
     try:
         # Retrieve relevant report chunks based on query
-        docs = retriever.get_relevant_documents(query.query)
+        docs = retriever.invoke(query.query) or []
+        context_text = "\n\n".join([d.page_content for d in docs]) if docs else ""
         
         summary_prompt = ChatPromptTemplate.from_messages([
             ("system", "You are an AI assistant for a Sustainability Copilot. Summarize the following document sections and provide a 500-word overview. Context: {context}"),
@@ -127,7 +129,7 @@ async def get_report_summary(query: QueryModel):
         ])
         
         summary_chain = create_stuff_documents_chain(llm, summary_prompt)
-        raw_response = summary_chain.invoke({"input_documents": docs, "input": "Generate a report summary."})
+        raw_response = summary_chain.invoke({"context": context_text, "input": "Generate a report summary."})
 
         if isinstance(raw_response, str):
             summary_text = raw_response
