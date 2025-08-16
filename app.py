@@ -27,7 +27,7 @@ conn.commit()
 
 # --- LLM and Embedding setup ---
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-llm = ChatGroq(model="mixtral-8x7b-32768", temperature=0.3)
+llm = ChatGroq(model="llama3-70b-8192", temperature=0.3)
 vector_db = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
 retriever = vector_db.as_retriever(search_kwargs={"k": 12})
 
