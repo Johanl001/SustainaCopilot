@@ -29,7 +29,7 @@ conn.commit()
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 llm = ChatGroq(model="mixtral-8x7b-32768", temperature=0.3)
 vector_db = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
-retriever = vector_db.as_retriever()
+retriever = vector_db.as_retriever(search_kwargs={"k": 12})
 
 # --- Pydantic models ---
 class QueryModel(BaseModel):
@@ -79,7 +79,6 @@ async def analyze_report_endpoint(file: UploadFile = File(...)):
 
         # Ingest into existing persistent vector store
         vector_db.add_documents(documents)
-        vector_db.persist()
 
         # Use LLM to generate structured summary and actions
         summary_prompt = ChatPromptTemplate.from_messages([
@@ -87,8 +86,7 @@ async def analyze_report_endpoint(file: UploadFile = File(...)):
             ("user", "{input}"),
         ])
         summary_chain = create_stuff_documents_chain(llm, summary_prompt)
-        context_text = "\n\n".join([d.page_content for d in documents])
-        raw_response = summary_chain.invoke({"input": original_filename, "context": context_text})
+        raw_response = summary_chain.invoke({"input_documents": documents[:20], "input": original_filename})
 
         if isinstance(raw_response, str):
             response_text = raw_response
@@ -122,7 +120,6 @@ async def get_report_summary(query: QueryModel):
     try:
         # Retrieve relevant report chunks based on query
         docs = retriever.get_relevant_documents(query.query)
-        context_text = "\n\n".join([d.page_content for d in docs]) if docs else ""
         
         summary_prompt = ChatPromptTemplate.from_messages([
             ("system", "You are an AI assistant for a Sustainability Copilot. Summarize the following document sections and provide a 500-word overview. Context: {context}"),
@@ -130,7 +127,7 @@ async def get_report_summary(query: QueryModel):
         ])
         
         summary_chain = create_stuff_documents_chain(llm, summary_prompt)
-        raw_response = summary_chain.invoke({"context": context_text, "input": "Generate a report summary."})
+        raw_response = summary_chain.invoke({"input_documents": docs, "input": "Generate a report summary."})
 
         if isinstance(raw_response, str):
             summary_text = raw_response
