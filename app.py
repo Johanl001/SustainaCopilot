@@ -1,5 +1,4 @@
 import os
-import io
 import uvicorn
 import json
 import sqlite3
@@ -71,12 +70,18 @@ async def analyze_report_endpoint(file: UploadFile = File(...)):
             os.makedirs("uploads")
         original_filename = os.path.basename(file.filename) or "uploaded.pdf"
         file_path = os.path.join("uploads", original_filename)
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
         with open(file_path, "wb") as f:
-            f.write(file.file.read())
+            f.write(contents)
 
         # Load and split PDF
-        loader = PyPDFLoader(file_path)
-        documents = loader.load_and_split()
+        try:
+            loader = PyPDFLoader(file_path)
+            documents = loader.load_and_split()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {e}")
 
         # Ingest into existing persistent vector store
         vector_db.add_documents(documents)
