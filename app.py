@@ -86,7 +86,7 @@ async def analyze_report_endpoint(file: UploadFile = File(...)):
             ("user", "{input}"),
         ])
         summary_chain = create_stuff_documents_chain(llm, summary_prompt)
-        context_text = "\n\n".join([d.page_content for d in documents[:20]])
+        context_text = "\n\n".join([d.page_content for d in documents[:8]])
         raw_response = summary_chain.invoke({"input": original_filename, "context": context_text})
 
         if isinstance(raw_response, str):
