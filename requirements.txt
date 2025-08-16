@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-langchain-groq
+langchain-openai
 langchain-huggingface
 langchain-chroma
 pydantic
