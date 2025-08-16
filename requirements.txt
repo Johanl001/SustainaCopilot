@@ -3,9 +3,8 @@ uvicorn[standard]
 langchain-groq
 langchain-huggingface
 langchain-chroma
-langchain-openai
 pydantic
 python-dotenv
-PyMuPDF
+pypdf
 sentence-transformers
-sqlite3
+chromadb
