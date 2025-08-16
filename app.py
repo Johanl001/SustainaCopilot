@@ -2,9 +2,8 @@ import os
 import uvicorn
 import json
 import sqlite3
-from typing import List, Dict, Any
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -12,11 +11,8 @@ from dotenv import load_dotenv
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
-from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.messages import HumanMessage
 from langchain_community.document_loaders import PyPDFLoader
 
 # Load environment variables
@@ -52,6 +48,13 @@ class ReportSummaryModel(BaseModel):
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+@app.on_event("shutdown")
+def shutdown_event():
+    try:
+        conn.close()
+    except Exception:
+        pass
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
     with open("static/index.html", "r") as f:
@@ -59,46 +62,84 @@ async def serve_frontend():
 
 @app.post("/analyze-report")
 async def analyze_report_endpoint(file: UploadFile = File(...)):
-    if not os.path.exists("uploads"):
-        os.makedirs("uploads")
-    
-    file_path = f"uploads/{file.filename}"
-    with open(file_path, "wb") as f:
-        f.write(file.file.read())
-    
-    loader = PyPDFLoader(file_path)
-    documents = loader.load_and_split()
-    
-    db = Chroma.from_documents(documents, embeddings, persist_directory="./chroma_db")
-    
-    # Use LLM to generate summary and actions
-    summary_prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a Sustainability Officer. Summarize the following report in 500 words and generate 3-5 actionable bullet points for employees. Use a professional but easy-to-read tone. Report: {report}"),
-        ("user", "{input}"),
-    ])
-    
-    summary_chain = create_stuff_documents_chain(llm, summary_prompt)
-    response = summary_chain.invoke({"input": file.filename, "report": documents})
+    try:
+        # Validate and persist upload
+        if not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="Only PDF files are supported at this time.")
+        if not os.path.exists("uploads"):
+            os.makedirs("uploads")
+        original_filename = os.path.basename(file.filename) or "uploaded.pdf"
+        file_path = os.path.join("uploads", original_filename)
+        with open(file_path, "wb") as f:
+            f.write(file.file.read())
 
-    # Save to database
-    cursor.execute("INSERT INTO reports (title, summary, actions) VALUES (?, ?, ?)", (file.filename, response['summary'], response['actions']))
-    conn.commit()
+        # Load and split PDF
+        loader = PyPDFLoader(file_path)
+        documents = loader.load_and_split()
 
-    return {"message": "Report analyzed successfully."}
+        # Ingest into existing persistent vector store
+        vector_db.add_documents(documents)
+        vector_db.persist()
+
+        # Use LLM to generate structured summary and actions
+        summary_prompt = ChatPromptTemplate.from_messages([
+            ("system", 'You are a Sustainability Officer. Using the provided context, write a 500-word summary and 3-5 actionable bullet points for employees. Return STRICT JSON with keys "summary" (string) and "actions" (array of strings). Context: {context}'),
+            ("user", "{input}"),
+        ])
+        summary_chain = create_stuff_documents_chain(llm, summary_prompt)
+        context_text = "\n\n".join([d.page_content for d in documents])
+        raw_response = summary_chain.invoke({"input": original_filename, "context": context_text})
+
+        if isinstance(raw_response, str):
+            response_text = raw_response
+        else:
+            response_text = getattr(raw_response, "content", str(raw_response))
+
+        try:
+            data = json.loads(response_text)
+            summary_text = data.get("summary", "")
+            actions_text = json.dumps(data.get("actions", []))
+        except Exception:
+            # Fallback: store raw text as summary when JSON parsing fails
+            summary_text = response_text
+            actions_text = json.dumps([])
+
+        # Save to database
+        cursor.execute(
+            "INSERT INTO reports (title, summary, actions) VALUES (?, ?, ?)",
+            (original_filename, summary_text, actions_text),
+        )
+        conn.commit()
+
+        return {"message": "Report analyzed successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/get-report-summary")
 async def get_report_summary(query: QueryModel):
-    # Retrieve relevant report chunks based on query
-    docs = retriever.get_relevant_documents(query.query)
-    
-    summary_prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an AI assistant for a Sustainability Copilot. Summarize the following document sections and provide a 500-word overview. Context: {context}"),
-        ("user", "{input}"),
-    ])
-    
-    summary_chain = create_stuff_documents_chain(llm, summary_prompt)
-    response = summary_chain.invoke({"context": docs, "input": "Generate a report summary."})
+    try:
+        # Retrieve relevant report chunks based on query
+        docs = retriever.get_relevant_documents(query.query)
+        context_text = "\n\n".join([d.page_content for d in docs]) if docs else ""
+        
+        summary_prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are an AI assistant for a Sustainability Copilot. Summarize the following document sections and provide a 500-word overview. Context: {context}"),
+            ("user", "{input}"),
+        ])
+        
+        summary_chain = create_stuff_documents_chain(llm, summary_prompt)
+        raw_response = summary_chain.invoke({"context": context_text, "input": "Generate a report summary."})
 
-    # You would need to add logic here to extract title and memo from the response
-    # For a simple solution, we'll return the full response as the summary
-    return ReportSummaryModel(title="Report Summary", summary=response, memo="Actionable Memo for Employees")
+        if isinstance(raw_response, str):
+            summary_text = raw_response
+        else:
+            summary_text = getattr(raw_response, "content", str(raw_response))
+
+        return ReportSummaryModel(title="Report Summary", summary=summary_text, memo="Actionable Memo for Employees")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    uvicorn.run("app:app", host="0.0.0.0", port=int(os.getenv("PORT", "8000")), reload=True)
