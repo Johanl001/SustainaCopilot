@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SustainaCopilot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen p-8">
+    <div class="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 transition-colors duration-300">
+        <header class="text-center mb-10">
+            <h1 class="text-5xl font-bold text-green-600 dark:text-green-400">SustainaCopilot</h1>
+            <p class="mt-2 text-xl text-gray-600 dark:text-gray-300">Your AI-powered guide to sustainability reports.</p>
+        </header>
+
+        <main>
+            <div class="bg-gray-50 dark:bg-gray-700 p-6 rounded-xl shadow-inner mb-6">
+                <h2 class="text-2xl font-semibold mb-4 text-green-700 dark:text-green-300">Upload a Report</h2>
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <input type="file" id="reportFile" name="file" accept=".pdf,.docx,.txt" class="block w-full text-sm text-gray-500
+                                file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0
+                                file:text-sm file:font-semibold
+                                file:bg-green-50 file:text-green-700
+                                hover:file:bg-green-100 cursor-pointer"/>
+                    <button type="submit" class="mt-4 px-6 py-2 bg-green-500 text-white font-bold rounded-full shadow-md hover:bg-green-600 transition-colors duration-200">
+                        Analyze Report
+                    </button>
+                </form>
+                <p id="uploadStatus" class="mt-4 text-center"></p>
+            </div>
+
+            <div class="bg-gray-50 dark:bg-gray-700 p-6 rounded-xl shadow-inner mb-6">
+                <h2 class="text-2xl font-semibold mb-4 text-green-700 dark:text-green-300">Ask the Copilot</h2>
+                <form id="queryForm">
+                    <textarea id="queryText" class="w-full p-3 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-green-500" rows="4" placeholder="e.g., 'Summarize the report' or 'What are the main goals?'"></textarea>
+                    <button type="submit" class="mt-4 px-6 py-2 bg-green-500 text-white font-bold rounded-full shadow-md hover:bg-green-600 transition-colors duration-200">
+                        Get Insights
+                    </button>
+                </form>
+                <div id="responseOutput" class="mt-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 min-h-[100px] whitespace-pre-wrap">
+                    AI response will appear here...
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="static/script.js"></script>
+</body>
+</html>

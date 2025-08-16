@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+langchain-groq
+langchain-huggingface
+langchain-chroma
+langchain-openai
+pydantic
+python-dotenv
+PyMuPDF
+sentence-transformers
+sqlite3
